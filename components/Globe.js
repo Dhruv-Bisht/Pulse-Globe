@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import NewsPanel from "./NewsPanel";
 import Legend from "./Legend";
-import { categoryColor, timeAgo } from "../lib/categories";
+import RangeSlider from "./RangeSlider";
+import { categoryColor, timeAgo, FEATURED_CATEGORY } from "../lib/categories";
+import { TIME_RANGES, DEFAULT_RANGE_KEY, indexForKey } from "../lib/time-ranges";
 
 const RADIUS = 2;
 const MARKER_SIZE = 0.045;
@@ -31,15 +33,26 @@ export default function Globe() {
   const [mode, setMode] = useState("loading");
   const [error, setError] = useState("");
   const [ready, setReady] = useState(false);
+  const [rangeIndex, setRangeIndex] = useState(indexForKey(DEFAULT_RANGE_KEY));
+  const [rangeLoading, setRangeLoading] = useState(false);
+  const [excludedCategories, setExcludedCategories] = useState(() => new Set());
+  const [enrichCache, setEnrichCache] = useState({});
+  const [enrichingId, setEnrichingId] = useState(null);
 
   const mountRef = useRef(null);
   const sceneRefs = useRef({}); // three.js objects, kept out of React state on purpose
   const itemsRef = useRef([]);
-  itemsRef.current = items;
+  const rangeIndexRef = useRef(rangeIndex);
+  rangeIndexRef.current = rangeIndex;
+
+  const filteredItems = items.filter((i) => !excludedCategories.has(i.category || "World"));
+  itemsRef.current = filteredItems;
 
   const load = useCallback(async () => {
+    const rangeKey = TIME_RANGES[rangeIndexRef.current].key;
+    setRangeLoading(true);
     try {
-      const res = await fetch("/api/news", { cache: "no-store" });
+      const res = await fetch(`/api/news?range=${rangeKey}`, { cache: "no-store" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Feed unavailable");
       setItems(Array.isArray(data.items) ? data.items : []);
@@ -48,14 +61,60 @@ export default function Globe() {
     } catch (e) {
       setError(e.message);
       setMode("error");
+    } finally {
+      setRangeLoading(false);
     }
   }, []);
 
+  // Reload whenever the time-range slider moves.
   useEffect(() => {
     load();
+  }, [rangeIndex, load]);
+
+  // Background refresh on GDELT's rough update cadence, always for whatever
+  // range is currently selected.
+  useEffect(() => {
     const timer = setInterval(load, 45000);
     return () => clearInterval(timer);
   }, [load]);
+
+  const toggleCategory = useCallback((name) => {
+    setExcludedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }, []);
+
+  // Fetch richer detail for a story straight from its source, once, when
+  // it's selected. Cached by item id so re-opening a pin doesn't re-fetch.
+  const enrich = useCallback((item) => {
+    if (!item?.url || !item?.id) return;
+    let alreadyRequested = false;
+    setEnrichCache((prev) => {
+      if (item.id in prev) { alreadyRequested = true; return prev; } // already fetched or in flight
+      return { ...prev, [item.id]: null };
+    });
+    if (alreadyRequested) return;
+    setEnrichingId(item.id);
+    fetch(`/api/enrich?url=${encodeURIComponent(item.url)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        setEnrichCache((prev) => ({ ...prev, [item.id]: data }));
+      })
+      .catch(() => {
+        setEnrichCache((prev) => ({ ...prev, [item.id]: { ok: false, error: "Could not reach source" } }));
+      })
+      .finally(() => {
+        setEnrichingId((current) => (current === item.id ? null : current));
+      });
+  }, []);
+
+  const selectItem = useCallback((item) => {
+    setSelected(item);
+    if (item) enrich(item);
+  }, [enrich]);
 
   // ---- Set up the three.js scene once ----
   useEffect(() => {
@@ -191,7 +250,9 @@ export default function Globe() {
 
       // Google Maps-inspired 3D location pin. The pin points into the globe
       // while its rounded head sits above the surface. Category color is kept
-      // so the existing legend/news categories still work.
+      // so the existing legend/news categories still work. Featured-category
+      // (Technology) pins get an extra additive halo so new tech coverage
+      // reads as visually distinct from the rest of the feed.
       const buildMarkers = (newsItems) => {
         while (markersGroup.children.length) {
           const g = markersGroup.children.pop();
@@ -204,6 +265,7 @@ export default function Globe() {
 
         newsItems.forEach((item) => {
           const color = new THREE.Color(categoryColor(item.category));
+          const isFeatured = item.category === FEATURED_CATEGORY;
           const surface = latLonToVector3(Number(item.lat), Number(item.lon), RADIUS * 1.008, THREE);
           const normal = surface.clone().normalize();
 
@@ -231,7 +293,6 @@ export default function Globe() {
           point.position.y = -MARKER_SIZE * 0.2;
           point.userData.item = item;
           group.add(point);
-          markerMeshes.push(point);
 
           // White center, like a Google Maps location pin.
           const center = new THREE.Mesh(
@@ -251,7 +312,26 @@ export default function Globe() {
           base.position.y = -MARKER_SIZE * 0.91;
           group.add(base);
 
+          if (isFeatured) {
+            const halo = new THREE.Mesh(
+              new THREE.RingGeometry(MARKER_SIZE * 1.15, MARKER_SIZE * 1.55, 28),
+              new THREE.MeshBasicMaterial({
+                color: 0x67e8f9,
+                transparent: true,
+                opacity: 0.55,
+                side: THREE.DoubleSide,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+              })
+            );
+            halo.rotation.x = Math.PI / 2;
+            halo.position.y = -MARKER_SIZE * 0.9;
+            halo.userData.isHalo = true;
+            group.add(halo);
+          }
+
           group.userData.item = item;
+          group.userData.isFeatured = isFeatured;
           markersGroup.add(group);
         });
       };
@@ -368,6 +448,13 @@ export default function Globe() {
           // Gentle floating/breathing motion instead of the old radar glow.
           const pulse = 1 + Math.sin(t * 2.2 + i * 0.37) * 0.045;
           group.scale.setScalar(pulse);
+          if (group.userData.isFeatured) {
+            const halo = group.children.find((c) => c.userData.isHalo);
+            if (halo) {
+              halo.material.opacity = 0.35 + Math.sin(t * 3.4 + i * 0.5) * 0.25;
+              halo.scale.setScalar(1 + Math.sin(t * 3.4 + i * 0.5) * 0.12);
+            }
+          }
         });
 
         renderer.render(scene, camera);
@@ -384,7 +471,7 @@ export default function Globe() {
           setHovered((prev) => (prev?.id === item?.id ? prev : item));
           if (item) setTooltipPos({ x, y });
         },
-        setSelectedFromLoop: (item) => setSelected(item),
+        setSelectedFromLoop: (item) => selectItem(item),
         dispose: () => {
           cancelAnimationFrame(raf);
           window.removeEventListener("pointermove", onPointerMove);
@@ -420,12 +507,14 @@ export default function Globe() {
       disposed = true;
       sceneRefs.current.dispose?.();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---- Rebuild markers whenever the news items change ----
+  // ---- Rebuild markers whenever the filtered news items change ----
   useEffect(() => {
-    sceneRefs.current.buildMarkers?.(items);
-  }, [items]);
+    sceneRefs.current.buildMarkers?.(filteredItems);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, excludedCategories]);
 
   return (
     <section className="globe-wrap">
@@ -438,16 +527,34 @@ export default function Globe() {
             <div className="hover-title">{hovered.title}</div>
             <div className="hover-meta">
               {hovered.city}
-              {hovered.country ? `, ${hovered.country}` : ""} · {timeAgo(hovered.createdAt)}
+              {hovered.country ? `, ${hovered.country}` : ""} · {hovered.approxTime ? `~${timeAgo(hovered.createdAt)}` : timeAgo(hovered.createdAt)}
             </div>
           </div>
         </div>
       )}
       <div className="drag-hint">Drag to rotate · Scroll to zoom · Click a pulse to read</div>
-      <Legend mode={mode} items={items} />
-      {selected && <NewsPanel item={selected} onClose={() => setSelected(null)} />}
+      <RangeSlider index={rangeIndex} onChange={setRangeIndex} loading={rangeLoading} />
+      <Legend
+        mode={mode}
+        items={items}
+        visibleCount={filteredItems.length}
+        activeCategories={new Set(
+          Array.from(new Set(items.map((i) => i.category || "World"))).filter((c) => !excludedCategories.has(c))
+        )}
+        onToggleCategory={toggleCategory}
+      />
+      {selected && (
+        <NewsPanel
+          item={selected}
+          enrichment={enrichCache[selected.id]}
+          enriching={enrichingId === selected.id}
+          onClose={() => setSelected(null)}
+        />
+      )}
       {error && <div className="empty">Feed error: {error}</div>}
-      {!error && items.length === 0 && ready && <div className="empty">No stories in the last 24 hours.</div>}
+      {!error && filteredItems.length === 0 && ready && !rangeLoading && (
+        <div className="empty">{items.length === 0 ? "No stories in this time window." : "No stories match the active filters."}</div>
+      )}
     </section>
   );
 }

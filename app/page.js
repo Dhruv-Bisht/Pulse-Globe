@@ -7,7 +7,7 @@ export default function Home() {
         <div>
           <div className="eyebrow">GLOBAL SIGNAL</div>
           <h1>Pulse Globe</h1>
-          <p>Read-only global stories from the last 24 hours.</p>
+          <p>Read-only global stories, from the last hour to the last year.</p>
         </div>
         <div className="status"><span /> LIVE FEED</div>
       </header>

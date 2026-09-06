@@ -1,8 +1,9 @@
-import { categoryList } from "../lib/categories";
+import { categoryList, FEATURED_CATEGORY } from "../lib/categories";
 
-export default function Legend({ mode, items = [] }) {
-  const activeCategories = new Set(items.map((i) => i.category || "World"));
-  const chips = categoryList().filter(([name]) => activeCategories.has(name));
+export default function Legend({ mode, items = [], visibleCount, activeCategories, onToggleCategory }) {
+  const presentCategories = new Set(items.map((i) => i.category || "World"));
+  const chips = categoryList().filter(([name]) => presentCategories.has(name));
+  const count = typeof visibleCount === "number" ? visibleCount : items.length;
 
   return (
     <div className="legend">
@@ -12,19 +13,31 @@ export default function Legend({ mode, items = [] }) {
       </div>
       <div className="legend-sub">
         {mode === "gdelt"
-          ? `${items.length} storie${items.length === 1 ? "" : "s"} · GDELT live feed`
+          ? `${count} storie${count === 1 ? "" : "s"} shown · GDELT live feed`
           : mode === "loading"
           ? "Fetching latest signals…"
           : "Seeded preview stories"}
       </div>
       {chips.length > 0 && (
         <div className="legend-chips">
-          {chips.map(([name, color]) => (
-            <span key={name} className="chip">
-              <span className="chip-dot" style={{ background: color }} />
-              {name}
-            </span>
-          ))}
+          {chips.map(([name, color]) => {
+            const isOn = activeCategories.has(name);
+            const isFeatured = name === FEATURED_CATEGORY;
+            return (
+              <button
+                key={name}
+                type="button"
+                className={`chip ${isOn ? "" : "chip-off"} ${isFeatured ? "chip-featured" : ""}`}
+                onClick={() => onToggleCategory(name)}
+                aria-pressed={isOn}
+                title={isFeatured ? "Newest technology stories" : `Toggle ${name}`}
+              >
+                <span className="chip-dot" style={{ background: color }} />
+                {name}
+                {isFeatured && <span className="chip-badge">NEW TECH</span>}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
