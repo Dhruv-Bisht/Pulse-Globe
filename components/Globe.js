@@ -6,7 +6,7 @@ import Legend from "./Legend";
 import { categoryColor, timeAgo } from "../lib/categories";
 
 const RADIUS = 2;
-const MARKER_SIZE = 0.03;
+const MARKER_SIZE = 0.024;
 const AUTO_ROTATE_SPEED = 0.0009;
 const DRAG_ROTATE_SPEED = 0.0055;
 const CLICK_MOVE_THRESHOLD = 6; // px — below this a pointer-up counts as a click, not a drag
@@ -208,6 +208,8 @@ export default function Globe() {
       const glowTexture = makeGlowTexture(THREE);
       const markerMeshes = [];
 
+      // Clean, modern intelligence-style marker:
+      // sharp core + two thin rings + a soft halo. The rings sit tangent to the globe.
       const buildMarkers = (newsItems) => {
         while (markersGroup.children.length) {
           const g = markersGroup.children.pop();
@@ -220,31 +222,58 @@ export default function Globe() {
 
         newsItems.forEach((item, i) => {
           const color = new THREE.Color(categoryColor(item.category));
-          const position = latLonToVector3(Number(item.lat), Number(item.lon), RADIUS * 1.012, THREE);
+          const position = latLonToVector3(Number(item.lat), Number(item.lon), RADIUS * 1.014, THREE);
+          const normal = position.clone().normalize();
 
           const group = new THREE.Group();
           group.position.copy(position);
+          group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
 
+          // Crisp center point — this is also the raycast target.
           const dot = new THREE.Mesh(
-            new THREE.SphereGeometry(MARKER_SIZE, 16, 16),
+            new THREE.SphereGeometry(MARKER_SIZE, 18, 18),
             new THREE.MeshBasicMaterial({ color })
           );
           dot.userData.item = item;
           group.add(dot);
           markerMeshes.push(dot);
 
-          const halo = new THREE.Sprite(
-            new THREE.SpriteMaterial({ map: glowTexture, color, transparent: true, opacity: 0.85, depthWrite: false })
+          // Tiny white-hot center gives the marker a sharper, premium look.
+          const core = new THREE.Mesh(
+            new THREE.SphereGeometry(MARKER_SIZE * 0.34, 12, 12),
+            new THREE.MeshBasicMaterial({ color: 0xffffff })
           );
-          halo.scale.set(MARKER_SIZE * 6, MARKER_SIZE * 6, 1);
-          group.add(halo);
+          group.add(core);
 
-          const ring = new THREE.Sprite(
-            new THREE.SpriteMaterial({ map: glowTexture, color, transparent: true, opacity: 0.5, depthWrite: false })
+          // Fixed inner targeting ring.
+          const innerRing = new THREE.Mesh(
+            new THREE.TorusGeometry(MARKER_SIZE * 1.75, MARKER_SIZE * 0.075, 8, 32),
+            new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending })
           );
-          group.userData.ring = ring;
+          group.add(innerRing);
+
+          // Expanding outer pulse ring.
+          const pulseRing = new THREE.Mesh(
+            new THREE.TorusGeometry(MARKER_SIZE * 2.5, MARKER_SIZE * 0.065, 8, 40),
+            new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending })
+          );
+          group.userData.pulseRing = pulseRing;
           group.userData.phase = (i / Math.max(1, newsItems.length)) * 1.6;
-          group.add(ring);
+          group.add(pulseRing);
+
+          // Very subtle glow behind the sharp geometry.
+          const halo = new THREE.Sprite(
+            new THREE.SpriteMaterial({
+              map: glowTexture,
+              color,
+              transparent: true,
+              opacity: 0.28,
+              depthWrite: false,
+              blending: THREE.AdditiveBlending
+            })
+          );
+          halo.scale.set(MARKER_SIZE * 4.8, MARKER_SIZE * 4.8, 1);
+          group.add(halo);
 
           markersGroup.add(group);
         });
@@ -359,12 +388,15 @@ export default function Globe() {
         }
 
         markersGroup.children.forEach((group) => {
-          const ring = group.userData.ring;
-          if (!ring) return;
-          const phase = (t * 0.9 + group.userData.phase) % 1.6;
-          const scale = MARKER_SIZE * 5 * (1 + phase * 1.6);
-          ring.scale.set(scale, scale, 1);
-          ring.material.opacity = Math.max(0, 0.5 - phase * 0.32);
+          const pulseRing = group.userData.pulseRing;
+          if (!pulseRing) return;
+
+          const phase = (t * 0.72 + group.userData.phase) % 1.6;
+          const progress = phase / 1.6;
+          const scale = 0.85 + progress * 2.15;
+
+          pulseRing.scale.set(scale, scale, 1);
+          pulseRing.material.opacity = Math.max(0, 0.72 * (1 - progress));
         });
 
         renderer.render(scene, camera);
