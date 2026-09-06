@@ -1,2 +1,0 @@
-VERCEL-GDELT-V8
-GDELT GEO 2.0 (<=7d, precise points) + DOC 2.0 (1mo-1y, country-level) + article enrichment + time slider + category filters

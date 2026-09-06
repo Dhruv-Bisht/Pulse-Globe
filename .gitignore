@@ -1,7 +1,6 @@
-node_modules/
-.next/
-.env
-.env.local
-.env.*.local
-npm-debug.log*
+node_modules
+.next
+out
+.env*
 .DS_Store
+npm-debug.log*
