@@ -6,7 +6,7 @@ import Legend from "./Legend";
 import { categoryColor, timeAgo } from "../lib/categories";
 
 const RADIUS = 2;
-const MARKER_SIZE = 0.03;
+const MARKER_SIZE = 0.045;
 const AUTO_ROTATE_SPEED = 0.0009;
 const DRAG_ROTATE_SPEED = 0.0055;
 const CLICK_MOVE_THRESHOLD = 6; // px — below this a pointer-up counts as a click, not a drag
@@ -205,9 +205,11 @@ export default function Globe() {
 
       const markersGroup = new THREE.Group();
       globeGroup.add(markersGroup);
-      const glowTexture = makeGlowTexture(THREE);
       const markerMeshes = [];
 
+      // Google Maps-inspired 3D location pin. The pin points into the globe
+      // while its rounded head sits above the surface. Category color is kept
+      // so the existing legend/news categories still work.
       const buildMarkers = (newsItems) => {
         while (markersGroup.children.length) {
           const g = markersGroup.children.pop();
@@ -218,34 +220,56 @@ export default function Globe() {
         }
         markerMeshes.length = 0;
 
-        newsItems.forEach((item, i) => {
+        newsItems.forEach((item) => {
           const color = new THREE.Color(categoryColor(item.category));
-          const position = latLonToVector3(Number(item.lat), Number(item.lon), RADIUS * 1.012, THREE);
+          const surface = latLonToVector3(Number(item.lat), Number(item.lon), RADIUS * 1.008, THREE);
+          const normal = surface.clone().normalize();
 
           const group = new THREE.Group();
-          group.position.copy(position);
+          // Lift the pin so the sharp tip visually touches the globe.
+          group.position.copy(surface).add(normal.clone().multiplyScalar(MARKER_SIZE * 0.72));
+          group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
 
-          const dot = new THREE.Mesh(
-            new THREE.SphereGeometry(MARKER_SIZE, 16, 16),
+          // Rounded pin head.
+          const head = new THREE.Mesh(
+            new THREE.SphereGeometry(MARKER_SIZE * 0.9, 20, 20),
             new THREE.MeshBasicMaterial({ color })
           );
-          dot.userData.item = item;
-          group.add(dot);
-          markerMeshes.push(dot);
+          head.position.y = MARKER_SIZE * 0.43;
+          head.userData.item = item;
+          group.add(head);
+          markerMeshes.push(head);
 
-          const halo = new THREE.Sprite(
-            new THREE.SpriteMaterial({ map: glowTexture, color, transparent: true, opacity: 0.85, depthWrite: false })
+          // Tapered point, giving the classic map-pin silhouette.
+          const point = new THREE.Mesh(
+            new THREE.ConeGeometry(MARKER_SIZE * 0.78, MARKER_SIZE * 1.55, 20),
+            new THREE.MeshBasicMaterial({ color })
           );
-          halo.scale.set(MARKER_SIZE * 6, MARKER_SIZE * 6, 1);
-          group.add(halo);
+          point.rotation.z = Math.PI;
+          point.position.y = -MARKER_SIZE * 0.2;
+          point.userData.item = item;
+          group.add(point);
+          markerMeshes.push(point);
 
-          const ring = new THREE.Sprite(
-            new THREE.SpriteMaterial({ map: glowTexture, color, transparent: true, opacity: 0.5, depthWrite: false })
+          // White center, like a Google Maps location pin.
+          const center = new THREE.Mesh(
+            new THREE.CircleGeometry(MARKER_SIZE * 0.34, 24),
+            new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide })
           );
-          group.userData.ring = ring;
-          group.userData.phase = (i / Math.max(1, newsItems.length)) * 1.6;
-          group.add(ring);
+          center.rotation.x = Math.PI / 2;
+          center.position.y = MARKER_SIZE * 0.43 + MARKER_SIZE * 0.88;
+          group.add(center);
 
+          // Very subtle shadow/base keeps the pin readable against the globe.
+          const base = new THREE.Mesh(
+            new THREE.RingGeometry(MARKER_SIZE * 0.7, MARKER_SIZE * 0.9, 24),
+            new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.28, side: THREE.DoubleSide })
+          );
+          base.rotation.x = Math.PI / 2;
+          base.position.y = -MARKER_SIZE * 0.91;
+          group.add(base);
+
+          group.userData.item = item;
           markersGroup.add(group);
         });
       };
@@ -358,13 +382,10 @@ export default function Globe() {
           }
         }
 
-        markersGroup.children.forEach((group) => {
-          const ring = group.userData.ring;
-          if (!ring) return;
-          const phase = (t * 0.9 + group.userData.phase) % 1.6;
-          const scale = MARKER_SIZE * 5 * (1 + phase * 1.6);
-          ring.scale.set(scale, scale, 1);
-          ring.material.opacity = Math.max(0, 0.5 - phase * 0.32);
+        markersGroup.children.forEach((group, i) => {
+          // Gentle floating/breathing motion instead of the old radar glow.
+          const pulse = 1 + Math.sin(t * 2.2 + i * 0.37) * 0.045;
+          group.scale.setScalar(pulse);
         });
 
         renderer.render(scene, camera);
@@ -376,7 +397,6 @@ export default function Globe() {
         THREE,
         markersGroup,
         markerMeshes,
-        glowTexture,
         buildMarkers,
         setHoveredFromLoop: (item, x, y) => {
           setHovered((prev) => (prev?.id === item?.id ? prev : item));
@@ -405,7 +425,6 @@ export default function Globe() {
           atmosphere.material.dispose();
           starGeo.dispose();
           starMat.dispose();
-          glowTexture.dispose();
           renderer.dispose();
           if (mount.contains(dom)) mount.removeChild(dom);
         }
