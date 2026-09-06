@@ -1,1 +1,2 @@
-vercel-gdelt-v5
+VERCEL-GDELT-V6
+Single-request GDELT PointData + geographic news markers
