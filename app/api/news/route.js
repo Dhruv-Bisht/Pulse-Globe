@@ -4,13 +4,13 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 15;
 
-const VERSION = 'vercel-gdelt-v4';
+const VERSION = 'vercel-gdelt-v5';
 
 export async function GET() {
   try {
-    const items = await getLiveNews();
+    const { items, diagnostics } = await getLiveNews();
     return Response.json(
-      { version: VERSION, items, mode: 'gdelt', updatedAt: Date.now() },
+      { version: VERSION, items, mode: 'gdelt', diagnostics, updatedAt: Date.now() },
       { headers: { 'Cache-Control': 'no-store', 'X-Pulse-Globe-Version': VERSION } }
     );
   } catch (error) {
