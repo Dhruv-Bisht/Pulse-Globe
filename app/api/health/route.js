@@ -1,4 +1,4 @@
-const VERSION = 'vercel-gdelt-v6';
+const VERSION = 'vercel-gdelt-v7';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

@@ -1,2 +1,2 @@
-VERCEL-GDELT-V6
-Single-request GDELT PointData + geographic news markers
+VERCEL-GDELT-V7
+GDELT GEO 2.0 with GKG GeoJSON geographic fallback
