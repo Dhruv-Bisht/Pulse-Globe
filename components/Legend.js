@@ -7,12 +7,12 @@ export default function Legend({ mode, items = [] }) {
   return (
     <div className="legend">
       <div className="legend-status">
-        <span className={`led ${mode === "dynamodb" ? "led-live" : "led-demo"}`} />
-        <b>{mode === "dynamodb" ? "LIVE DATA" : mode === "loading" ? "CONNECTING" : "DEMO DATA"}</b>
+        <span className={`led ${mode === "gdelt" ? "led-live" : "led-demo"}`} />
+        <b>{mode === "gdelt" ? "LIVE DATA" : mode === "loading" ? "CONNECTING" : "DEMO DATA"}</b>
       </div>
       <div className="legend-sub">
-        {mode === "dynamodb"
-          ? `${items.length} storie${items.length === 1 ? "" : "s"} · DynamoDB feed`
+        {mode === "gdelt"
+          ? `${items.length} storie${items.length === 1 ? "" : "s"} · GDELT live feed`
           : mode === "loading"
           ? "Fetching latest signals…"
           : "Seeded preview stories"}

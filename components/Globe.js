@@ -61,7 +61,7 @@ export default function Globe() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Feed unavailable");
       setItems(Array.isArray(data.items) ? data.items : []);
-      setMode(data.mode || "dynamodb");
+      setMode(data.mode || "gdelt");
       setError("");
     } catch (e) {
       setError(e.message);
