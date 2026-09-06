@@ -8,7 +8,7 @@ export default function Legend({ mode, items = [] }) {
     <div className="legend">
       <div className="legend-status">
         <span className={`led ${mode === "gdelt" ? "led-live" : "led-demo"}`} />
-        <b>{mode === "gdelt" ? "LIVE DATA" : mode === "loading" ? "CONNECTING" : "DEMO DATA"}</b>
+        <b>{mode === "gdelt" ? "LIVE DATA" : mode === "loading" ? "CONNECTING" : mode === "error" ? "FEED ERROR" : "DEMO DATA"}</b>
       </div>
       <div className="legend-sub">
         {mode === "gdelt"
