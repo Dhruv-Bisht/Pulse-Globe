@@ -1,60 +1,76 @@
-import { NextResponse } from "next/server";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { listRecentNews, putNews } from "../../../lib/dynamo";
-import crypto from "node:crypto";
+import { demoNews } from "../../../lib/demo-news";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function authorized(request) {
-  const expected = process.env.API_SECRET;
-  const provided = request.headers.get("x-api-key");
-  if (!expected || !provided) return false;
-  const a = Buffer.from(provided);
+function validSecret(request) {
+  const supplied = request.headers.get("x-api-key") || "";
+  const expected = process.env.API_SECRET || "";
+  if (!expected || !supplied) return false;
+  const a = Buffer.from(supplied);
   const b = Buffer.from(expected);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function clean(body) {
+  return {
+    title: String(body.title || "").trim(),
+    summary: String(body.summary || "").trim(),
+    city: String(body.city || "").trim(),
+    country: String(body.country || "").trim(),
+    category: String(body.category || "World").trim(),
+    source: String(body.source || "Unknown").trim(),
+    lat: Number(body.lat),
+    lon: Number(body.lon)
+  };
 }
 
 export async function GET() {
   try {
     const items = await listRecentNews();
-    return NextResponse.json({ items });
+    if (items.length > 0) {
+      return Response.json({ items, mode: "dynamodb" }, { headers: { "Cache-Control": "no-store" } });
+    }
+    if (process.env.DEMO_MODE === "true") {
+      return Response.json({ items: demoNews, mode: "demo" }, { headers: { "Cache-Control": "no-store" } });
+    }
+    return Response.json({ items: [], mode: "dynamodb" }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    console.error("GET /api/news failed", error);
-    return NextResponse.json({ error: "News service unavailable" }, { status: 500 });
+    console.error("GET /api/news failed:", error);
+    if (process.env.DEMO_MODE === "true") {
+      return Response.json({ items: demoNews, mode: "demo-fallback" }, { headers: { "Cache-Control": "no-store" } });
+    }
+    return Response.json({ error: "News service unavailable" }, { status: 503 });
   }
 }
 
 export async function POST(request) {
-  if (!authorized(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!validSecret(request)) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const body = await request.json();
-    const title = String(body.title || "").trim();
-    const summary = String(body.summary || "").trim();
-    const city = String(body.city || "").trim();
-    const category = String(body.category || "General").trim();
-    const lat = Number(body.lat);
-    const lon = Number(body.lon);
-
-    if (!title || !summary || !city || !Number.isFinite(lat) || !Number.isFinite(lon)) {
-      return NextResponse.json({ error: "title, summary, city, lat and lon are required" }, { status: 400 });
+    const body = clean(await request.json());
+    const required = [body.title, body.summary, body.city];
+    if (required.some(v => !v) || !Number.isFinite(body.lat) || !Number.isFinite(body.lon)) {
+      return Response.json({ error: "Invalid news payload" }, { status: 400 });
+    }
+    if (body.lat < -90 || body.lat > 90 || body.lon < -180 || body.lon > 180) {
+      return Response.json({ error: "Invalid coordinates" }, { status: 400 });
     }
 
+    const createdAt = Date.now();
     const item = {
-      id: crypto.randomUUID(),
-      title: title.slice(0, 200),
-      summary: summary.slice(0, 1000),
-      city: city.slice(0, 100),
-      category: category.slice(0, 60),
-      lat: Math.max(-90, Math.min(90, lat)),
-      lon: Math.max(-180, Math.min(180, lon)),
-      createdAt: Date.now()
+      pk: "NEWS",
+      id: randomUUID(),
+      ...body,
+      createdAt,
+      expiresAt: Math.floor((createdAt + 48 * 60 * 60 * 1000) / 1000)
     };
-
     await putNews(item);
-    return NextResponse.json({ item }, { status: 201 });
+    return Response.json(item, { status: 201 });
   } catch (error) {
-    console.error("POST /api/news failed", error);
-    return NextResponse.json({ error: "Unable to create news item" }, { status: 500 });
+    console.error("POST /api/news failed:", error);
+    return Response.json({ error: "Could not create news item" }, { status: 500 });
   }
 }

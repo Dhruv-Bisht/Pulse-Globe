@@ -1,27 +1,24 @@
-import { NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { deleteNews } from "../../../../lib/dynamo";
-import crypto from "node:crypto";
 
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
-function authorized(request) {
-  const expected = process.env.API_SECRET;
-  const provided = request.headers.get("x-api-key");
-  if (!expected || !provided) return false;
-  const a = Buffer.from(provided);
+function validSecret(request) {
+  const supplied = request.headers.get("x-api-key") || "";
+  const expected = process.env.API_SECRET || "";
+  if (!expected || !supplied) return false;
+  const a = Buffer.from(supplied);
   const b = Buffer.from(expected);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 export async function DELETE(request, { params }) {
-  if (!authorized(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+  if (!validSecret(request)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
     await deleteNews(params.id);
-    return NextResponse.json({ ok: true });
+    return Response.json({ ok: true });
   } catch (error) {
-    console.error("DELETE /api/news failed", error);
-    return NextResponse.json({ error: "Unable to delete news item" }, { status: 500 });
+    console.error("DELETE /api/news failed:", error);
+    return Response.json({ error: "Could not delete news item" }, { status: 500 });
   }
 }

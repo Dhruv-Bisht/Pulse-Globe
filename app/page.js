@@ -1,27 +1,18 @@
 import Globe from "../components/Globe";
-import Legend from "../components/Legend";
 
 export default function Home() {
   return (
-    <main className="shell">
+    <main className="page">
       <header className="topbar">
         <div>
-          <p className="eyebrow">LIVE GLOBAL SIGNALS</p>
+          <div className="eyebrow">GLOBAL SIGNAL</div>
           <h1>Pulse Globe</h1>
-          <p className="subtitle">Recent stories from around the world · last 24 hours</p>
+          <p>Read-only global stories from the last 24 hours.</p>
         </div>
-        <div className="status"><span className="dot" /> Live</div>
+        <div className="status"><span /> LIVE FEED</div>
       </header>
-
-      <section className="map-card">
-        <Globe />
-        <Legend />
-      </section>
-
-      <footer className="footer">
-        <span>Read-only public view</span>
-        <span>Updates every 45 seconds</span>
-      </footer>
+      <Globe />
+      <footer>Updates automatically every 45 seconds · Drag the globe to explore · Click a pulse to read</footer>
     </main>
   );
 }
