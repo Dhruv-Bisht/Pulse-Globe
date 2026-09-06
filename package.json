@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "seed": "node scripts/seed-news.js",
-    "post-news": "node scripts/post-news.js"
+    "post-news": "node scripts/post-news.js",
+    "fetch-live-news": "node scripts/fetch-live-news.js"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.900.0",

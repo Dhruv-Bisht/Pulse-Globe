@@ -17,7 +17,21 @@ A read-only global news globe built with Next.js App Router and DynamoDB.
 - Includes a seed script for writing test stories to your DynamoDB-backed API.
 - `post-news.js` works with both `http://` and `https://`.
 
-## 1. Run locally
+## 1a. Get real news onto the globe
+
+Out of the box the API only returns whatever you `POST` into DynamoDB yourself — that's why you were only seeing demo pins. `scripts/fetch-live-news.js` fixes that: it pulls real, already-geocoded stories from the [GDELT Project's](https://www.gdeltproject.org) free GEO 2.0 API (no signup, no key, updates every 15 minutes, covers 100+ countries) and posts them into `/api/news` for you, one category at a time (Technology, Business, Climate, Science, Health, World).
+
+Run it once locally:
+
+```bash
+PULSE_GLOBE_URL=http://localhost:3000 API_SECRET=your-secret node scripts/fetch-live-news.js
+```
+
+To keep the globe live in production, run it on a schedule. The easiest option if your code is on GitHub is the included `.github/workflows/fetch-news.yml` — just add two repo secrets (`PULSE_GLOBE_URL` pointing at your deployed Amplify URL, and `API_SECRET` matching your `.env`/Amplify environment variable) and it runs every 20 minutes automatically. If you'd rather stay inside AWS, wire the same script into an EventBridge Scheduler rule that invokes a small Lambda.
+
+If you want different or narrower topics (e.g. tech-only), edit the `CATEGORY_QUERIES` object at the top of the script — each entry is just a GDELT keyword query.
+
+## 1b. Run locally
 
 ```bash
 npm install
