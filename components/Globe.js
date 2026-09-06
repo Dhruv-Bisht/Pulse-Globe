@@ -6,11 +6,7 @@ import Legend from "./Legend";
 import { categoryColor, timeAgo } from "../lib/categories";
 
 const RADIUS = 2;
-<<<<<<< HEAD
 const MARKER_SIZE = 0.045;
-=======
-const MARKER_SIZE = 0.024;
->>>>>>> 4ca7393838f2c0fc6ec0ef5718b0242319e7ef72
 const AUTO_ROTATE_SPEED = 0.0009;
 const DRAG_ROTATE_SPEED = 0.0055;
 const CLICK_MOVE_THRESHOLD = 6; // px — below this a pointer-up counts as a click, not a drag
@@ -25,24 +21,6 @@ function latLonToVector3(lat, lon, radius, THREE) {
     radius * Math.cos(phi),
     radius * Math.sin(phi) * Math.sin(theta)
   );
-}
-
-function makeGlowTexture(THREE) {
-  const size = 128;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  gradient.addColorStop(0, "rgba(255,255,255,1)");
-  gradient.addColorStop(0.25, "rgba(255,255,255,0.7)");
-  gradient.addColorStop(0.6, "rgba(255,255,255,0.15)");
-  gradient.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, size, size);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
 }
 
 export default function Globe() {
@@ -211,14 +189,9 @@ export default function Globe() {
       globeGroup.add(markersGroup);
       const markerMeshes = [];
 
-<<<<<<< HEAD
       // Google Maps-inspired 3D location pin. The pin points into the globe
       // while its rounded head sits above the surface. Category color is kept
       // so the existing legend/news categories still work.
-=======
-      // Clean, modern intelligence-style marker:
-      // sharp core + two thin rings + a soft halo. The rings sit tangent to the globe.
->>>>>>> 4ca7393838f2c0fc6ec0ef5718b0242319e7ef72
       const buildMarkers = (newsItems) => {
         while (markersGroup.children.length) {
           const g = markersGroup.children.pop();
@@ -231,7 +204,6 @@ export default function Globe() {
 
         newsItems.forEach((item) => {
           const color = new THREE.Color(categoryColor(item.category));
-<<<<<<< HEAD
           const surface = latLonToVector3(Number(item.lat), Number(item.lon), RADIUS * 1.008, THREE);
           const normal = surface.clone().normalize();
 
@@ -243,18 +215,6 @@ export default function Globe() {
           // Rounded pin head.
           const head = new THREE.Mesh(
             new THREE.SphereGeometry(MARKER_SIZE * 0.9, 20, 20),
-=======
-          const position = latLonToVector3(Number(item.lat), Number(item.lon), RADIUS * 1.014, THREE);
-          const normal = position.clone().normalize();
-
-          const group = new THREE.Group();
-          group.position.copy(position);
-          group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
-
-          // Crisp center point — this is also the raycast target.
-          const dot = new THREE.Mesh(
-            new THREE.SphereGeometry(MARKER_SIZE, 18, 18),
->>>>>>> 4ca7393838f2c0fc6ec0ef5718b0242319e7ef72
             new THREE.MeshBasicMaterial({ color })
           );
           head.position.y = MARKER_SIZE * 0.43;
@@ -262,7 +222,6 @@ export default function Globe() {
           group.add(head);
           markerMeshes.push(head);
 
-<<<<<<< HEAD
           // Tapered point, giving the classic map-pin silhouette.
           const point = new THREE.Mesh(
             new THREE.ConeGeometry(MARKER_SIZE * 0.78, MARKER_SIZE * 1.55, 20),
@@ -282,44 +241,6 @@ export default function Globe() {
           center.rotation.x = Math.PI / 2;
           center.position.y = MARKER_SIZE * 0.43 + MARKER_SIZE * 0.88;
           group.add(center);
-=======
-          // Tiny white-hot center gives the marker a sharper, premium look.
-          const core = new THREE.Mesh(
-            new THREE.SphereGeometry(MARKER_SIZE * 0.34, 12, 12),
-            new THREE.MeshBasicMaterial({ color: 0xffffff })
-          );
-          group.add(core);
-
-          // Fixed inner targeting ring.
-          const innerRing = new THREE.Mesh(
-            new THREE.TorusGeometry(MARKER_SIZE * 1.75, MARKER_SIZE * 0.075, 8, 32),
-            new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending })
-          );
-          group.add(innerRing);
-
-          // Expanding outer pulse ring.
-          const pulseRing = new THREE.Mesh(
-            new THREE.TorusGeometry(MARKER_SIZE * 2.5, MARKER_SIZE * 0.065, 8, 40),
-            new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending })
-          );
-          group.userData.pulseRing = pulseRing;
-          group.userData.phase = (i / Math.max(1, newsItems.length)) * 1.6;
-          group.add(pulseRing);
-
-          // Very subtle glow behind the sharp geometry.
-          const halo = new THREE.Sprite(
-            new THREE.SpriteMaterial({
-              map: glowTexture,
-              color,
-              transparent: true,
-              opacity: 0.28,
-              depthWrite: false,
-              blending: THREE.AdditiveBlending
-            })
-          );
-          halo.scale.set(MARKER_SIZE * 4.8, MARKER_SIZE * 4.8, 1);
-          group.add(halo);
->>>>>>> 4ca7393838f2c0fc6ec0ef5718b0242319e7ef72
 
           // Very subtle shadow/base keeps the pin readable against the globe.
           const base = new THREE.Mesh(
@@ -443,23 +364,10 @@ export default function Globe() {
           }
         }
 
-<<<<<<< HEAD
         markersGroup.children.forEach((group, i) => {
           // Gentle floating/breathing motion instead of the old radar glow.
           const pulse = 1 + Math.sin(t * 2.2 + i * 0.37) * 0.045;
           group.scale.setScalar(pulse);
-=======
-        markersGroup.children.forEach((group) => {
-          const pulseRing = group.userData.pulseRing;
-          if (!pulseRing) return;
-
-          const phase = (t * 0.72 + group.userData.phase) % 1.6;
-          const progress = phase / 1.6;
-          const scale = 0.85 + progress * 2.15;
-
-          pulseRing.scale.set(scale, scale, 1);
-          pulseRing.material.opacity = Math.max(0, 0.72 * (1 - progress));
->>>>>>> 4ca7393838f2c0fc6ec0ef5718b0242319e7ef72
         });
 
         renderer.render(scene, camera);
