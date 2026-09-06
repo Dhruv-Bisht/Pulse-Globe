@@ -1,146 +1,122 @@
-# Pulse — a living globe of tech news
+# Pulse Globe — AWS Amplify-ready
 
-A rotating 3D globe (React + Next.js + three.js) that plots tech-news
-markers by city. Each marker pulses brighter when fresh and fades out over
-24 hours, then disappears. Visitors can only view — news is added by you,
-through a protected API, never through the site itself.
+A read-only public Next.js globe that displays news created through a protected API.
 
-## Stack
+## Architecture
 
-- **Next.js / React** — frontend + API routes
-- **Node.js** — the API routes run on the Node runtime (not Edge), since the
-  AWS SDK needs Node APIs
-- **DynamoDB** — stores news items; a native TTL attribute auto-purges rows
-  ~24h after they're posted, in addition to the API filtering by timestamp
-  on every read
-- **three.js** — renders the globe, drawn straight to a `<canvas>` inside a
-  client component
+Browser → Next.js on AWS Amplify → `/api/news` → DynamoDB
 
-## 1. Create the DynamoDB table
+Visitors can only `GET` recent stories. `POST` and `DELETE` require `x-api-key: API_SECRET`.
 
-Using the AWS CLI (adjust the region as needed):
+## 1. Requirements
 
-```bash
-aws dynamodb create-table \
-  --table-name PulseNews \
-  --attribute-definitions AttributeName=id,AttributeType=S \
-  --key-schema AttributeName=id,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST \
-  --region us-east-1
-```
+- Node.js 20+
+- npm
+- AWS account
+- GitHub repository
+- DynamoDB table
 
-`PAY_PER_REQUEST` (on-demand) billing keeps this inside the DynamoDB free
-tier for a low-traffic project like this — you pay per request instead of
-provisioning capacity you don't use.
+## 2. DynamoDB table
 
-Then turn on TTL on the `ttl` attribute (one-time console step, or via CLI):
+Create a table named `PulseGlobeNews` with:
 
-```bash
-aws dynamodb update-time-to-live \
-  --table-name PulseNews \
-  --time-to-live-specification "Enabled=true, AttributeName=ttl" \
-  --region us-east-1
-```
+- Partition key: `pk` (String)
+- Sort key: `id` (String)
 
-## 2. IAM permissions
+Enable TTL on attribute:
 
-Whatever runs the app (an IAM role attached to your EC2 instance / App
-Runner service / Amplify app, or a local `aws configure` profile) needs:
+- `expiresAt`
 
-- `dynamodb:PutItem`
-- `dynamodb:Scan`
-- `dynamodb:DeleteItem`
+The application uses `pk = NEWS` and `createdAt` as the sort key condition in its query. For DynamoDB Query to work efficiently with the supplied schema, create a GSI named `NewsByTime`:
+- Partition key: `pk` (String)
+- Sort key: `createdAt` (Number)
 
-scoped to the `PulseNews` table's ARN.
+Then update `lib/dynamo.js` `QueryCommand` with:
+`IndexName: "NewsByTime"`.
 
-## 3. Configure environment variables
+Alternatively, if you prefer no GSI, replace the query with a Scan + filter for a small portfolio dataset.
 
-Copy `.env.example` to `.env.local` and fill in:
+## 3. IAM
 
-- `AWS_REGION` — same region as the table
-- `DYNAMODB_TABLE` — `PulseNews` (or whatever you named it)
-- `API_SECRET` — a long random string you generate yourself (`openssl rand
-  -hex 32`); this is the only thing standing between the public internet and
-  your POST/DELETE endpoints, so keep it out of source control and out of
-  any client-side code
-- `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` — only if you're not using an
-  IAM role (e.g. running locally without an `aws configure` profile)
+The identity used by the Next.js server needs:
+- dynamodb:Query
+- dynamodb:PutItem
+- dynamodb:DeleteItem
 
-## 4. Run locally
+restricted to the `PulseGlobeNews` table and its `NewsByTime` index.
 
-```bash
-npm install
+## 4. Environment variables
+
+Local `.env.local`:
+
+AWS_REGION=ap-south-1
+DYNAMODB_TABLE=PulseGlobeNews
+API_SECRET=use-a-long-random-secret
+
+Never commit `.env.local`.
+
+In Amplify, add the same variables under Environment variables. `API_SECRET` must remain server-only; do not prefix it with `NEXT_PUBLIC_`.
+
+## 5. Local run
+
+npm ci
 npm run dev
-```
 
-Visit `http://localhost:3000` — the globe will show "No reports in the last
-24 hours" until you post something.
+Then open http://localhost:3000.
 
-## 5. Post news (the only way news gets in)
+Test production build:
 
-```bash
-API_SECRET=your-secret BASE_URL=http://localhost:3000 \
-  node scripts/post-news.js \
-  "Startup ships on-device translation model" \
-  "The model runs fully offline on phone-class hardware and claims parity with cloud models on common language pairs." \
-  "Tokyo" \
-  "AI"
-```
+npm run build
+npm start
 
-`category` must be one of: `AI`, `Hardware`, `Software`, `Security`,
-`Business`, `Space`. `city` must match a name in `lib/cities.js` — extend
-that list with more cities if you need somewhere it doesn't cover.
+## 6. Amplify
 
-To retract something early:
+This repository already contains `amplify.yml`.
 
-```bash
-curl -X DELETE https://your-domain/api/news/<item-id> \
-  -H "x-api-key: your-secret"
-```
+Important settings:
+- This is NOT a monorepo.
+- Leave "Monorepo app root" empty.
+- Framework: Next.js
+- Build command: `npm run build`
+- Build output: `.next`
 
-Optional: `scripts/generate-ai-news.js` asks Claude to draft several items
-and posts them for you in one go — useful for seeding a demo, or as a
-starting point you edit before posting for real. It needs
-`ANTHROPIC_API_KEY` set. It's just a script you run yourself; nothing about
-it is reachable from the deployed site.
+AWS documents `.next` as the correct artifact directory for Next.js SSR apps when using an amplify.yml build specification.
 
-## 6. Deploy to AWS
+Connect the GitHub repository to Amplify and deploy the `main` branch.
 
-Two straightforward paths:
+## 7. Add news
 
-**AWS Amplify Hosting (recommended)** — supports Next.js server-rendering
-directly, has a free tier, and deploys straight from a Git repo:
-1. Push this project to a Git repo.
-2. In the Amplify console, "New app" → "Host web app" → connect the repo.
-3. Add the environment variables from step 3 in the Amplify app's
-   environment variable settings.
-4. Attach an IAM service role to the Amplify app with the DynamoDB
-   permissions from step 2 (Amplify console → App settings → IAM role).
-5. Deploy — Amplify builds and hosts it.
+Local:
 
-**EC2 (more manual, more control)**:
-1. Launch a `t3.micro`/`t2.micro` instance (free tier eligible for the
-   first 12 months) with an attached IAM role granting the DynamoDB
-   permissions above.
-2. Install Node.js, clone the repo, `npm install`, `npm run build`.
-3. Run it with a process manager: `pm2 start npm --name pulse -- start`.
-4. Put it behind Nginx (or an Application Load Balancer) for TLS/port 80.
+API_SECRET=... PULSE_GLOBE_URL=http://localhost:3000 node scripts/post-news.js "Headline" "Gist sentence." "Tokyo" "AI" 35.6762 139.6503
 
-Either way, nothing in the frontend bundle contains `API_SECRET` — it's only
-read server-side inside the API route handlers, so it's safe even though
-the rest of the app is public.
+Production:
 
-## Extending
+API_SECRET=... PULSE_GLOBE_URL=https://YOUR-APP.amplifyapp.com node scripts/post-news.js "Headline" "Gist sentence." "Tokyo" "AI" 35.6762 139.6503
 
-- **More cities**: add entries to `CITIES` in `lib/cities.js` — the API
-  validates against this list, so both the poster script and the frontend
-  automatically pick up new ones.
-- **Scale past Scan**: `lib/dynamo.js` currently does a table Scan filtered
-  by timestamp, which is fine for a rolling day of items. If you post at
-  high volume, add a Global Secondary Index with a constant partition key
-  and `timestamp` as the sort key, and swap the Scan for a Query — the item
-  shape doesn't need to change.
-- **Scheduled auto-posting**: wire `scripts/generate-ai-news.js` (or your
-  own real news source) into an EventBridge Scheduler rule invoking a
-  Lambda, or a cron job on the EC2 box, if you want new items to appear on
-  a timer without running the script by hand.
+No admin UI is exposed.
+
+## 8. Security notes
+
+- Never expose API_SECRET to client-side code.
+- Do not put AWS credentials in browser code.
+- Prefer an IAM role for the server runtime rather than long-lived AWS access keys.
+- Keep the API secret long and random.
+- DynamoDB TTL is eventual, so the application also filters by the last 24 hours on reads.
+
+## 9. Troubleshooting
+
+If Amplify reports missing modules:
+- Keep imports relative (`../components/...`, `../../../lib/...`) as this project does.
+- Do not depend on Windows case-insensitivity.
+- Commit every referenced file to Git.
+- Run `npm ci && npm run build` locally before pushing.
+
+If Amplify reports an artifact/baseDirectory error:
+- Ensure the repository `amplify.yml` is present at the repository root.
+- Ensure `baseDirectory: .next`.
+- Ensure the app is configured as a normal Next.js app, not a monorepo.
+
+If DynamoDB returns AccessDenied:
+- Check the Amplify SSR service role/runtime permissions.
+- Verify the region and table name.

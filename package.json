@@ -1,20 +1,19 @@
 {
-  "name": "pulse-globe",
+  "name": "pulse-globe-amplify",
   "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "post-news": "node scripts/post-news.js",
-    "generate-ai-news": "node scripts/generate-ai-news.js"
+    "lint": "next lint",
+    "post-news": "node scripts/post-news.js"
   },
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.600.0",
-    "@aws-sdk/lib-dynamodb": "^3.600.0",
-    "next": "14.2.5",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "three": "^0.160.0"
+    "@aws-sdk/client-dynamodb": "^3.900.0",
+    "@aws-sdk/lib-dynamodb": "^3.900.0",
+    "next": "^15.5.7",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
   }
 }
