@@ -16,7 +16,7 @@ export default function NewsPanel({ item, onClose }) {
       </div>
       <h2>{item.title}</h2>
       <div className="summary">{item.summary}</div>
-      {item.source && <div className="source">Source: {item.source}</div>}
+      {item.source && <div className="source">Source: {item.url ? <a href={item.url} target="_blank" rel="noreferrer">{item.source}</a> : item.source}</div>}
       {item.demo && <div className="demo-note">Demo story — replace with your own feed.</div>}
     </aside>
   );

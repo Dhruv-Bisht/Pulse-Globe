@@ -6,6 +6,8 @@ frontend:
         - npm ci
     build:
       commands:
+        # Next.js server/API code needs these non-secret settings at runtime.
+        - env | grep -e '^AWS_REGION=' -e '^DYNAMODB_TABLE=' -e '^DEMO_MODE=' >> .env.production || true
         - npm run build
   artifacts:
     baseDirectory: .next

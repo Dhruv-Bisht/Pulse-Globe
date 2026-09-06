@@ -19,7 +19,7 @@ A read-only global news globe built with Next.js App Router and DynamoDB.
 
 ## 1a. Get real news onto the globe
 
-Out of the box the API only returns whatever you `POST` into DynamoDB yourself — that's why you were only seeing demo pins. `scripts/fetch-live-news.js` fixes that: it pulls real, already-geocoded stories from the [GDELT Project's](https://www.gdeltproject.org) free GEO 2.0 API (no signup, no key, updates every 15 minutes, covers 100+ countries) and posts them into `/api/news` for you, one category at a time (Technology, Business, Climate, Science, Health, World).
+The public `GET /api/news` endpoint now has a live GDELT fallback. It first tries DynamoDB, but if DynamoDB is empty or unavailable it directly fetches real, already-geocoded stories from the GDELT GEO 2.0 API. This prevents an AWS/IAM/configuration problem from turning the globe into `News service unavailable`. GDELT is a free global news data source with coverage across more than 100 languages and countries. The background ingestion script is still included so you can persist stories into DynamoDB.
 
 Run it once locally:
 
@@ -59,7 +59,7 @@ Create a GSI:
 Enable DynamoDB TTL on:
 - `expiresAt`
 
-The app only queries the last 24 hours. Items are also given an expiry timestamp for cleanup.
+The app only queries the last 24 hours. Items are also given an expiry timestamp for cleanup. If DynamoDB cannot be queried, the API falls back to live GDELT data.
 
 ## 3. Environment variables
 
